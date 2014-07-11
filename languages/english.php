@@ -5,7 +5,7 @@
  * @name 		English language support for imgal
  * @author		Masoud Gheysari M <me@gheysari.com>
  * @license		GPLv3
- * @copyright 	2009 Masoud Gheysari M
+ * @copyright 	2014 - Masoud Gheysari M
  */
  
 	global $language;

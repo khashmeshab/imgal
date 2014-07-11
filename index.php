@@ -5,14 +5,18 @@
  * @name 		imgal Core File
  * @author		Masoud Gheysari M <me@gheysari.com>
  * @license		GPLv3
- * @copyright 	2009 Masoud Gheysari M
+ * @copyright 	2014 - Masoud Gheysari M
  */
 	
 	ini_set('display_errors','Off');
 	
-	require_once('config.ini.php');
+	require_once('config.php');
 
-	define('IMGAL_VERSION','imgal-0.8.1');
+	define('IMGAL_VERSION','imgal-2.0.0');
+	
+	define('DIR_ICONS'			,'icons/'.DEFAULT_ICONS.'/');
+	define('DIR_THEME'			,'themes/'.DEFAULT_ICONS.'/');
+	define('DIR_LANGUAGES'		,realpath('.').'/languages/');
 	
 	session_start();
 	
@@ -22,8 +26,8 @@
 		$_SESSION['language']=DEFAULT_LANGUAGE;
 	}
 	
-	require_once('languages/english.inc.php');
-	require_once('languages/'.$_SESSION['language'].'.inc.php');
+	require_once(DIR_LANGUAGES.'english.php');
+	require_once(DIR_LANGUAGES.$_SESSION['language'].'.php');
 	
 	$image_extensions=array('png','jpg','gif');
 	$text_extensions=array('txt','log','ini','bat','sh','nfo');
@@ -337,7 +341,7 @@
 		    	echo '<td width="'.(100/ICONS_PER_ROW).'%"><a href="?path='.$browsing.$dir['name'].'/" style="text-decoration: none">';
 		    	if(!SHOW_NAMES_BESIDE)
 		    		echo '<center>';
-		    	echo '<img src="images/'.$icon.'" border="0" align="absmiddle"/>';
+		    	echo '<img src="'.DIR_ICONS.$icon.'" border="0" align="absmiddle"/>';
 		    	if(!SHOW_NAMES_BESIDE)
 		    		echo '<br/>';
 		    	echo '<font face="Tahoma" style="font-size=8pt" color="black">'.$dir['name'].'</font>';
@@ -382,11 +386,11 @@
     	else
     		$rtn.='<img src="?path='.$image.'&mode=image" border="1" style="border-color:7f7f7f">';
     	
-    	$rtn.='</td><td background="images/middle-right.jpg" valign="top"><img src="images/top-right.jpg"/></td><td>';
+    	$rtn.='</td><td background="'.DIR_THEME.'images/middle-right.jpg" valign="top"><img src="'.DIR_THEME.'images/top-right.jpg"/></td><td>';
     	if(SHOW_NAMES_BESIDE)
 			$rtn.='<a href="?path='.$browsing.get_file_name($image).'" style="text-decoration: none"><font face="Tahoma" size="2" color="black">'.get_file_name($image).'</font></a>';
     	$rtn.='</td></tr>';
-    	$rtn.='<tr height="9px"><td background="images/bottom-center.jpg"><img src="images/bottom-left.jpg"/></td><td><img src="images/bottom-right.jpg"/></td><td></td></tr>';
+    	$rtn.='<tr height="9px"><td background="'.DIR_THEME.'images/bottom-center.jpg"><img src="'.DIR_THEME.'images/bottom-left.jpg"/></td><td><img src="'.DIR_THEME.'images/bottom-right.jpg"/></td><td></td></tr>';
     	$rtn.='</table>';
     	if(!SHOW_NAMES_BESIDE)
 			$rtn.='<a href="?path='.$browsing.get_file_name($image).'" style="text-decoration: none"><font face="Tahoma" style="font-size=8pt" color="black">'.get_file_name($image).'</font></a>';
@@ -396,11 +400,11 @@
 	function make_file_icon($path) {
 		$file_extension=get_file_extension($path);
 		
-		if(file_exists(realpath("./images/mimetypes/$file_extension.png")))
+		if(file_exists(realpath('./'.DIR_ICONS."$file_extension.png")))
 			$img=$file_extension.'.png';
 		else 
 			$img='file.png';
-    	$rtn ='<a href="?path='.$path.'" style="text-decoration: none"><img src="images/mimetypes/'.$img.'" border="0" align="absmiddle"/></a>';
+    	$rtn ='<a href="?path='.$path.'" style="text-decoration: none"><img src="'.DIR_ICONS.$img.'" border="0" align="absmiddle"/></a>';
     	if(!SHOW_NAMES_BESIDE)
     		$rtn.='<br/>';
     	$rtn.='<a href="?path='.$path.'" style="text-decoration: none"><font face="Tahoma" style="font-size=8pt" color="black">'.get_file_name($path).'</font></a>';
@@ -481,11 +485,10 @@
 		if(CHANGE_LANG_ENABLE) {
 			echo '<form dir="'.label('OPTN_DIR').'" action="?path='.$browsing.'&language" method="POST" style="margin-bottom:0;"><select name="language" size="1" id="language" onChange="JavaScript:form.submit()" style="font-name:Tahoma;font-size=10;border-style:solid;border-width:1px;border-color=d6ba49;">';
 	
-			$language_path=realpath('.').'/languages/';
-			if ($handle = opendir($language_path)) {
+			if ($handle = opendir(DIR_LANGUAGES)) {
 			    while (false !== ($file = readdir($handle))) {
-					if(is_file($language_path.$file) && substr($file,-8,8)=='.inc.php') {
-						$language=substr($file,0,-8);
+					if(is_file(DIR_LANGUAGES.$file) && substr($file,-4)=='.php') {
+						$language=substr($file,0,-4);
 						if($language==$_SESSION['language']) {
 							$selected='selected';
 						} else {
@@ -510,17 +513,17 @@
 			}
 			if($mode=='search') $browsing_up=$browsing;
 			if($previous_file) {
-				echo '<a href="?path='.$browsing_up.$previous_file.'"><img src="images/previous.png" border="0"/></a>';
+				echo '<a href="?path='.$browsing_up.$previous_file.'"><img src="'.DIR_THEME.'images/previous.png" border="0"/></a>';
 			} elseif(is_image($path)) {
 				echo '<img src="images/previous_inactive.png" border="0"/>';
 			}
 			if($next_file) {
-				echo '<a href="?path='.$browsing_up.$next_file.'"><img src="images/next.png" border="0"/></a>';
+				echo '<a href="?path='.$browsing_up.$next_file.'"><img src="'.DIR_THEME.'images/next.png" border="0"/></a>';
 			} elseif(is_image($path)) {
 				echo '<img src="images/next_inactive.png" border="0"/>';
 			}
 
-			echo '<a href="?path='.$browsing_up.'"><img src="images/up.png" border="0"/></a><a href="?path=/"><img src="images/home.png" border="0"/></a>';
+			echo '<a href="?path='.$browsing_up.'"><img src="'.DIR_THEME.'images/up.png" border="0"/></a><a href="?path=/"><img src="'.DIR_THEME.'images/home.png" border="0"/></a>';
 		}
 		echo '</p></td></tr><tr><td colspan="6" bgcolor="ffff99"><br/>';
 	}
@@ -640,7 +643,7 @@
 		foreach($files as $name=>$address) {
 			if(is_array($address)) {
 				$create_zip->addDirectory($root_path.$name.'/');
-				zip_add_files(&$create_zip,$address,$root_path.$name.'/');
+				zip_add_files($create_zip,$address,$root_path.$name.'/');
 			} else {
 				$create_zip->addFile(file_get_contents($address),$root_path.$name);
 			}

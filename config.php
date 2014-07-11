@@ -8,7 +8,7 @@
  * @copyright 	2009 Masoud Gheysari M
  */
 	
-	define('ROOT_PATH'			,'./');	// physical root path where you want to browse.
+	define('ROOT_PATH'			,'./');			// physical root path where you want to browse.
 	define('SHOW_THUMBNAIL'		,true);			// if set to true, imgal shows thumbnail for images.
 	define('FAST_RENDER'		,true);			// if set to true, thumbnail images will render more quickly but with less quality.
 	define('HERO_PASSWORD'		,'imgal');		// password of the hero user (the superuser) who can upload files.
@@ -25,5 +25,7 @@
 	define('DEFAULT_LANGUAGE'	,'english');	// default interface language
 	define('SEARCH_ENABLE'		,false);		// should imgal let users to search.
 	define('CHANGE_LANG_ENABLE'	,true);			// should imgal let users to change language.
+	define('DEFAULT_THEME',		'default');		// the default theme
+	define('DEFAULT_ICONS',		'default');		// the default icon pack
 
 ?>
