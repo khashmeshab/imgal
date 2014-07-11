@@ -1,0 +1,7 @@
+0.8.1:
+	* Configuration section is now in a separated file: config.ini.php
+	* Multilanguage support.
+	* In config.ini.php, SEARCH_ENABLE lets HERO to enable or disable search.
+
+0.7.1:
+	* This file created.
