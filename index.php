@@ -16,9 +16,10 @@
 
 	define('IMGAL_VERSION','2.0.0');
 	
-	define('DIR_ICONS'			,'icons/'.DEFAULT_ICONS.'/');
-	define('DIR_THEME'			,'themes/'.DEFAULT_THEME.'/');
-	define('DIR_LANGUAGES'		,realpath('.').'/languages/');
+	define('URI_ICONS'			,'icons/'.DEFAULT_ICONS.'/');
+	define('URI_THEME'			,'themes/'.DEFAULT_THEME.'/');
+	define('DIR_THEME'			,realpath('themes/'.DEFAULT_THEME).'/');
+	define('DIR_LANGUAGES'		,realpath('./languages').'/');
 	
 	session_start();
 	
@@ -63,9 +64,9 @@
 	$dir_name=get_file_name($browsing);
 	if(!$dir_name) $dir_name='root';
 	
-	$megan=new Megan(DIR_THEME.'template.html');
-	$megan->PageTitle='ImGal-v'.IMGAL_VERSION;
-	$megan->URITheme=DIR_THEME;
+	$megan=new Megan('template.html',DIR_THEME);
+	$megan->PageTitle='imGal v'.IMGAL_VERSION;
+	$megan->URITheme=URI_THEME;
 	$megan->Browsing=$browsing;
 	
 	$do=$_GET['do'];
@@ -73,55 +74,55 @@
 	switch($do) {
 		case 'logout':
 			session_unset();
-			$message=label('TEXT_LOGOUT_SUCCESSFUL');
+			$megan->Message=label('TEXT_LOGOUT_SUCCESSFUL');
 			break;
 			
 		case 'login':
 			if($_POST['password']==HERO_PASSWORD) {
 				$_SESSION['username']='hero';
-				$message=label('TEXT_LOGIN_SUCCESSFUL',array('user'=>'HERO'));
+				$megan->Message=label('TEXT_LOGIN_SUCCESSFUL',array('user'=>'HERO'));
 			} else {
-				$message=label('TEXT_INVALID_PASSWORD',array('user'=>'HERO'));
+				$megan->Message=label('TEXT_INVALID_PASSWORD',array('user'=>'HERO'));
 			}
 			break;
 			
 		case 'mkdir':
 			if($_SESSION['username']!='hero') {
-				$message=label('TEXT_NO_ACCESS_MKDIR');
+				$megan->Message=label('TEXT_NO_ACCESS_MKDIR');
 			} else {
 				$mkdir=get_file_path($path).$_POST['dir-name'];;
 				if(@mkdir($mkdir)) {
-					$message=label('TEXT_MKDIR_SUCCESSFUL');
+					$megan->Message=label('TEXT_MKDIR_SUCCESSFUL');
 				} else {
-					$message=label('TEXT_MKDIR_ERROR');
+					$megan->Message=label('TEXT_MKDIR_ERROR');
 				}
 			}
 			break;
 		
 		case 'upload':
 			if($_SESSION['username']!='hero') {
-				$message=label('TEXT_NO_ACCESS_UPLOAD');
+				$megan->Message=label('TEXT_NO_ACCESS_UPLOAD');
 			} else {
 				$uploaddir=get_file_path($path);
 				$uploadfile=$uploaddir.basename($_FILES['file-path']['name']);
 				if(move_uploaded_file($_FILES['file-path']['tmp_name'], $uploadfile)) {
-					$message=label('TEXT_UPLOAD_SUCCESSFUL');
+					$megan->Message=label('TEXT_UPLOAD_SUCCESSFUL');
 				} else {
-					$message=label('TEXT_UPLOAD_ERROR');
+					$megan->Message=label('TEXT_UPLOAD_ERROR');
 				}
 			}
 			break;
 			
 		case 'link':
 			if($_SESSION['username']!='hero') {
-				$message=label('TEXT_NO_ACCESS_LINK');
+				$megan->Message=label('TEXT_NO_ACCESS_LINK');
 			} else {
 				$address=$_POST['address'];
 				$address=str_replace('\\','/',$address);
 				$file=fopen(get_file_path($path).get_file_name($address).'.imgal','w');
 				fwrite($file,$address);
 				fclose($file);
-				$message=label('TEXT_LINK_SUCCESSFUL');
+				$megan->Message=label('TEXT_LINK_SUCCESSFUL');
 			}
 			
 		case 'thumb':
@@ -200,17 +201,18 @@
 			require_once('tar.php');
 			$tar = new imTar($path,$dir_name);
 			$tar->generate();
+			break;
 			
 		case 'copy':
 			if($_SESSION['username']!='hero') {
-				$message=label('TEXT_NO_ACCESS_COPY');
+				$megan->Message=label('TEXT_NO_ACCESS_COPY');
 			} else {
 				$url = $_POST['copy-url'];
 				$localfile = $path.get_file_name($url);
 				if(copy($url, $localfile))
-					$message=label('TEXT_COPY_SUCCESSFUL');
+					$megan->Message=label('TEXT_COPY_SUCCESSFUL');
 				else 
-					$message=label('TEXT_COPY_ERROR');
+					$megan->Message=label('TEXT_COPY_ERROR');
 			}
 			break;
 		
@@ -249,31 +251,35 @@
 					$next_file=$files[$current_image+1];
 				}
 			}
-
-			generate_header();
+			
+			$megan->Contents='<center>'.make_image_in_frame($browsing,false).'</center>';
+			/*generate_header();
 			echo '<center>';
 			echo make_image_in_frame($browsing,false);
 			echo '</center>';
-			generate_footer();
+			generate_footer();*/
 			die();
 		} elseif(is_text($path) && PREVIEW_TEXT_FILES) {
-			generate_header();
+			$megan->Contents='<pre>'.file_get_contents($path).'</pre>';
+			/*generate_header();
 			echo '<pre>';
 			readfile($path);
 			echo '</pre>';
-			generate_footer();
+			generate_footer();*/
 			die();
 		} elseif(is_html($path) && PREVIEW_HTML_FILES) {
-			generate_header();
+			$megan->Contents=file_get_contents($path);
+			/*generate_header();
 			readfile($path);
-			generate_footer();
+			generate_footer();*/
 			die();
 		} elseif(is_code($path) && PREVIEW_CODE_FILES) {
-			generate_header();
+			$megan->Contents='<table dir="ltr" width="100%"><tr><td>'.highlight_file($path,true).'</td></tr></table>';
+			/*generate_header();
 			echo '<table dir="ltr" width="100%"><tr><td>';
 			highlight_file($path);
 			echo '</td></tr></table>';
-			generate_footer();
+			generate_footer();*/
 			die();
 		} else {
 			header('Content-Disposition: attachment; filename="'.get_file_name($path).'"');
@@ -283,35 +289,35 @@
 		}
 	}
 
-	generate_header();
+	//generate_header();
 		
 	$dirs=array();
 	$files=array();
 	
 	if($do=='search' && $query) {
 	    $i=0;
-	   	echo '<table width="100%" style="table-layout:fixed"><tr>';
+		$megan->Contents.='<table width="100%" style="table-layout:fixed"><tr>';
 	    foreach($matches as $name=>$address) {
 	    	if($i>=ICONS_PER_ROW) {
-	    		echo '</tr><tr>';
+				$megan->Contents='</tr><tr>';
 	    		$i=0;
 	    	}
-	    	echo '<td width="'.(100/ICONS_PER_ROW).'%">';
+			$megan->Contents.='<td width="'.(100/ICONS_PER_ROW).'%">';
 	    	if(!SHOW_NAMES_BESIDE)
-		    	echo '<center>';
+		    	$megan->Contents.='<center>';
 	    	if(is_image($name) && SHOW_THUMBNAIL) {
-	    		echo make_image_in_frame($name,true);
+	    		$megan->Contents.=make_image_in_frame($name,true);
 	    	} else {
-	    		echo make_file_icon($name);
+	    		$megan->Contents.=make_file_icon($name);
 	    	}
 	    	
 			if(!SHOW_NAMES_BESIDE)
-	    		echo '<br/></center>';
+	    		$megan->Contents.='<br/></center>';
 
-	    	'</td>';
+	    	$megan->Contents.='</td>';
 	    	$i++;
 	    }
-	    echo '</tr></table>';
+	    $megan->Contents.='</tr></table>';
 	} else {
 		if ($handle = opendir($path)) {
 		    while (false !== ($file = readdir($handle))) {
@@ -335,7 +341,7 @@
 			sort($files);
 	
 		    $i=0;
-		   	echo '<table width="100%" style="table-layout:fixed"><tr>';
+		   	$megan->Contents.='<table width="100%" style="table-layout:fixed"><tr>';
 		    foreach($dirs as $dir) {
 		    	if($dir['type']=='p') {
 		    		$icon='folder.png';
@@ -343,47 +349,49 @@
 		    		$icon='vfolder.png';
 		    	}
 		    	if($i>=ICONS_PER_ROW) {
-		    		echo '</tr><tr>';
+		    		$megan->Contents.='</tr><tr>';
 		    		$i=0;
 		    	}
-		    	echo '<td width="'.(100/ICONS_PER_ROW).'%"><a href="?path='.$browsing.$dir['name'].'/" style="text-decoration: none">';
+		    	$megan->Contents.='<td width="'.(100/ICONS_PER_ROW).'%"><a href="?path='.$browsing.$dir['name'].'/" style="text-decoration: none">';
 		    	if(!SHOW_NAMES_BESIDE)
-		    		echo '<center>';
-		    	echo '<img src="'.DIR_ICONS.$icon.'" border="0" align="absmiddle"/>';
+		    		$megan->Contents.='<center>';
+		    	$megan->Contents.='<img src="'.URI_ICONS.$icon.'" border="0" align="absmiddle"/>';
 		    	if(!SHOW_NAMES_BESIDE)
-		    		echo '<br/>';
-		    	echo '<font face="Tahoma" style="font-size=8pt" color="black">'.$dir['name'].'</font>';
+		    		$megan->Contents.='<br/>';
+		    	$megan->Contents.='<font face="Tahoma" style="font-size=8pt" color="black">'.$dir['name'].'</font>';
 		    	if(!SHOW_NAMES_BESIDE)
-		    		echo '</center>';
-		    	echo '</a></td>';
+		    		$megan->Contents.='</center>';
+		    	$megan->Contents.='</a></td>';
 		    	$i++;
 		    }
 	
 		    foreach($files as $file) {
 		    	if($i>=ICONS_PER_ROW) {
-		    		echo '</tr><tr>';
+		    		$megan->Contents.='</tr><tr>';
 		    		$i=0;
 		    	}
-		    	echo '<td width="'.(100/ICONS_PER_ROW).'%">';
+		    	$megan->Contents.='<td width="'.(100/ICONS_PER_ROW).'%">';
 		    	if(!SHOW_NAMES_BESIDE)
-			    	echo '<center>';
+			    	$megan->Contents.='<center>';
 		    	if(is_image($file) && SHOW_THUMBNAIL) {
-		    		echo make_image_in_frame($browsing.$file,true);
+		    		$megan->Contents.=make_image_in_frame($browsing.$file,true);
 		    	} else {
-		    		echo make_file_icon($browsing.$file);
+		    		$megan->Contents.=make_file_icon($browsing.$file);
 		    	}
 		    	
 				if(!SHOW_NAMES_BESIDE)
-		    		echo '<br/></center>';
+		    		$megan->Contents.='<br/></center>';
 	
-		    	'</td>';
+		    	$megan->Contents.='</td>';
 		    	$i++;
 		    }
-		    echo '</tr></table>';
+		    $megan->Contents.='</tr></table>';
 		}
 	}
 	
-	generate_footer();
+	//generate_footer();
+	
+	$megan->Generate();
 	
 	function make_image_in_frame($image,$thumb=false) {
 		global $browsing;
@@ -394,11 +402,11 @@
     	else
     		$rtn.='<img src="?path='.$image.'&do=image" border="1" style="border-color:7f7f7f">';
     	
-    	$rtn.='</td><td background="'.DIR_THEME.'images/middle-right.jpg" valign="top"><img src="'.DIR_THEME.'images/top-right.jpg"/></td><td>';
+    	$rtn.='</td><td background="'.URI_THEME.'images/middle-right.jpg" valign="top"><img src="'.URI_THEME.'images/top-right.jpg"/></td><td>';
     	if(SHOW_NAMES_BESIDE)
 			$rtn.='<a href="?path='.$browsing.get_file_name($image).'" style="text-decoration: none"><font face="Tahoma" size="2" color="black">'.get_file_name($image).'</font></a>';
     	$rtn.='</td></tr>';
-    	$rtn.='<tr height="9px"><td background="'.DIR_THEME.'images/bottom-center.jpg"><img src="'.DIR_THEME.'images/bottom-left.jpg"/></td><td><img src="'.DIR_THEME.'images/bottom-right.jpg"/></td><td></td></tr>';
+    	$rtn.='<tr height="9px"><td background="'.URI_THEME.'images/bottom-center.jpg"><img src="'.URI_THEME.'images/bottom-left.jpg"/></td><td><img src="'.URI_THEME.'images/bottom-right.jpg"/></td><td></td></tr>';
     	$rtn.='</table>';
     	if(!SHOW_NAMES_BESIDE)
 			$rtn.='<a href="?path='.$browsing.get_file_name($image).'" style="text-decoration: none"><font face="Tahoma" style="font-size=8pt" color="black">'.get_file_name($image).'</font></a>';
@@ -408,11 +416,11 @@
 	function make_file_icon($path) {
 		$file_extension=get_file_extension($path);
 		
-		if(file_exists(realpath('./'.DIR_ICONS."$file_extension.png")))
+		if(file_exists(realpath('./'.URI_ICONS."$file_extension.png")))
 			$img=$file_extension.'.png';
 		else 
 			$img='file.png';
-    	$rtn ='<a href="?path='.$path.'" style="text-decoration: none"><img src="'.DIR_ICONS.$img.'" border="0" align="absmiddle"/></a>';
+    	$rtn ='<a href="?path='.$path.'" style="text-decoration: none"><img src="'.URI_ICONS.$img.'" border="0" align="absmiddle"/></a>';
     	if(!SHOW_NAMES_BESIDE)
     		$rtn.='<br/>';
     	$rtn.='<a href="?path='.$path.'" style="text-decoration: none"><font face="Tahoma" style="font-size=8pt" color="black">'.get_file_name($path).'</font></a>';
@@ -495,17 +503,17 @@
 			}
 			if($do=='search') $browsing_up=$browsing;
 			if($previous_file) {
-				echo '<a href="?path='.$browsing_up.$previous_file.'"><img src="'.DIR_THEME.'images/previous.png" border="0"/></a>';
+				echo '<a href="?path='.$browsing_up.$previous_file.'"><img src="'.URI_THEME.'images/previous.png" border="0"/></a>';
 			} elseif(is_image($path)) {
 				echo '<img src="images/previous_inactive.png" border="0"/>';
 			}
 			if($next_file) {
-				echo '<a href="?path='.$browsing_up.$next_file.'"><img src="'.DIR_THEME.'images/next.png" border="0"/></a>';
+				echo '<a href="?path='.$browsing_up.$next_file.'"><img src="'.URI_THEME.'images/next.png" border="0"/></a>';
 			} elseif(is_image($path)) {
 				echo '<img src="images/next_inactive.png" border="0"/>';
 			}
 
-			echo '<a href="?path='.$browsing_up.'"><img src="'.DIR_THEME.'images/up.png" border="0"/></a><a href="?path=/"><img src="'.DIR_THEME.'images/home.png" border="0"/></a>';
+			echo '<a href="?path='.$browsing_up.'"><img src="'.URI_THEME.'images/up.png" border="0"/></a><a href="?path=/"><img src="'.URI_THEME.'images/home.png" border="0"/></a>';
 		}
 		echo '</p></td></tr><tr><td colspan="6" bgcolor="ffff99"><br/>';
 	}
@@ -530,7 +538,7 @@
 			echo '<input type="text" size="20" name="address" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><br/><input type="submit" value="'.label('BUTN_LINK').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
 			echo '</td><td><p align="center"><font face="Tahoma" size="1">';
-			echo '<a href="?path='.$browsing.'&do=logout" style="text-decoration: none"><img src="'.DIR_THEME.'images/logout.png" border="0"/><br/>'.label('TEXT_LOGOUT').'</a>';
+			echo '<a href="?path='.$browsing.'&do=logout" style="text-decoration: none"><img src="'.URI_THEME.'images/logout.png" border="0"/><br/>'.label('TEXT_LOGOUT').'</a>';
 			echo '</font></p>';
 			echo '</td>';
 		} else {

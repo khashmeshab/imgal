@@ -1,15 +1,26 @@
 <html>
 	<head>
 		<title>#{PageTitle}</title>
-		<link rel="StyleSheet" href="${URITemplate}/style.css" type="text/css" media="screen">
-		<link rel="icon" type="image/ico" href="${URITheme}/images/icon.jpg">
-		<link rel="shortcut icon" href="${URITheme}/images/icon.jpg">
-		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+		<link rel="StyleSheet" href="${URITheme}/style.css" type="text/css" media="screen" />
+		<link rel="icon" type="image/ico" href="${URITheme}/images/icon.jpg" />
+		<link rel="shortcut icon" href="${URITheme}/images/icon.jpg" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		{{Headers{
 			${Header}
 		}}Headers}
 	</head>
 	<body>
-		
+		<div id="header">
+			
+		</div>
+		<div id="contents">
+			${Contents}
+		</div>
+		<div id="sidebar">
+			
+		</div>
+		<div id="footer">
+			
+		</div>
 	</body>
 </html>
