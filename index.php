@@ -11,11 +11,13 @@
 	ini_set('display_errors','Off');
 	
 	require_once('config.php');
+	require_once('library.php');
+	require_once('megan.php');
 
-	define('IMGAL_VERSION','imgal-2.0.0');
+	define('IMGAL_VERSION','2.0.0');
 	
 	define('DIR_ICONS'			,'icons/'.DEFAULT_ICONS.'/');
-	define('DIR_THEME'			,'themes/'.DEFAULT_ICONS.'/');
+	define('DIR_THEME'			,'themes/'.DEFAULT_THEME.'/');
 	define('DIR_LANGUAGES'		,realpath('.').'/languages/');
 	
 	session_start();
@@ -29,7 +31,7 @@
 	require_once(DIR_LANGUAGES.'english.php');
 	require_once(DIR_LANGUAGES.$_SESSION['language'].'.php');
 	
-	$image_extensions=array('png','jpg','gif');
+	$image_extensions=array('png','jpg','jpeg','gif');
 	$text_extensions=array('txt','log','ini','bat','sh','nfo');
 	$html_extensions=array('htm','html');
 	$code_extensions=array('php');
@@ -58,9 +60,17 @@
 		
 	$path=str_replace('\\','/',$path);
 	
-	$mode=$_GET['mode'];
+	$dir_name=get_file_name($browsing);
+	if(!$dir_name) $dir_name='root';
 	
-	switch($mode) {
+	$megan=new Megan(DIR_THEME.'template.html');
+	$megan->PageTitle='ImGal-v'.IMGAL_VERSION;
+	$megan->URITheme=DIR_THEME;
+	$megan->Browsing=$browsing;
+	
+	$do=$_GET['do'];
+	
+	switch($do) {
 		case 'logout':
 			session_unset();
 			$message=label('TEXT_LOGOUT_SUCCESSFUL');
@@ -116,37 +126,46 @@
 			
 		case 'thumb':
 			if(is_image($path)) {
-				switch (get_file_extension($path)) {
-					case 'png':
-						$im = imagecreatefrompng($path);
-						break;
-					case 'jpg':
-						$im = imagecreatefromjpeg($path);
-						break;
-					case 'gif':
-						$im = imagecreatefromgif($path);
-						break;
-				}
-				if($im) {
-					header("Content-Type: image/jpeg");
-					$width=imagesx($im);
-					$height=imagesy($im);
-					if($width/$height>MAX_THUMB_WIDTH/MAX_THUMB_HEIGHT) {
-						$new_width=MAX_THUMB_WIDTH;
-						$new_height=($height/$width)*MAX_THUMB_WIDTH;
-					} else {
-						$new_width=($width/$height)*MAX_THUMB_HEIGHT;
-						$new_height=MAX_THUMB_HEIGHT;
+				$thumb_name=get_temp_name($path,'thumb',null,'jpg');
+				if(!file_exists($thumb_name)) {
+					// remove the previous versions
+					foreach(glob(get_temp_name($path,'thumb','*','jpg')) as $file)
+						unlink($file);
+					
+					switch (get_file_extension($path)) {
+						case 'png':
+							$im = imagecreatefrompng($path);
+							break;
+						case 'jpg':
+						case 'jpeg':
+							$im = imagecreatefromjpeg($path);
+							break;
+						case 'gif':
+							$im = imagecreatefromgif($path);
+							break;
 					}
-					if(FAST_RENDER) {
-						$im2=imagecreate($new_width,$new_height);
-						imagecopyresized($im2,$im,0,0,0,0,$new_width,$new_height,$width,$height);
-					} else {
-						$im2=imagecreatetruecolor($new_width,$new_height);
-						imagecopyresampled($im2,$im,0,0,0,0,$new_width,$new_height,$width,$height);
+					if($im) {
+						$width=imagesx($im);
+						$height=imagesy($im);
+						if($width/$height>MAX_THUMB_WIDTH/MAX_THUMB_HEIGHT) {
+							$new_width=MAX_THUMB_WIDTH;
+							$new_height=($height/$width)*MAX_THUMB_WIDTH;
+						} else {
+							$new_width=($width/$height)*MAX_THUMB_HEIGHT;
+							$new_height=MAX_THUMB_HEIGHT;
+						}
+						if(FAST_RENDER) {
+							$im2=imagecreate($new_width,$new_height);
+							imagecopyresized($im2,$im,0,0,0,0,$new_width,$new_height,$width,$height);
+						} else {
+							$im2=imagecreatetruecolor($new_width,$new_height);
+							imagecopyresampled($im2,$im,0,0,0,0,$new_width,$new_height,$width,$height);
+						}
+						imagejpeg($im2,$thumb_name);
 					}
-					imagejpeg($im2);
 				}
+				header("Content-Type: image/jpeg");
+				readfile($thumb_name);
 				die();
 			}
 			break;
@@ -169,30 +188,18 @@
 			}
 			break; 
 			
-		case 'download-zip':
+		case 'zip':
 			if(is_dir($path) && DOWNLOAD_ZIP_DIR) {
-				$create_zip=new createZip($temp_path);
-				$files=prepare_file_list($path);
-				$dir_name=get_file_name($browsing);
-				if(!$dir_name) $dir_name='root';
-				$create_zip->addDirectory($dir_name.'/');
-				zip_add_files($create_zip,$files,$dir_name.'/');
-				$create_zip->prepareZippedfile();
-				$create_zip->forceDownload($dir_name.'.zip');
-				die();
+				require_once('zip.php');
+				$zip=new imZip($path,$dir_name,TEMP_PATH);
+				$zip->generate();
 			}
 			break;
 		
-		case 'download-tar':
-			if(is_dir($path) && DOWNLOAD_TAR_DIR) {
-				$dir_name=get_file_name($browsing);
-				if(!$dir_name) $dir_name='root';
-				$files=prepare_file_list($path,$tar_total_size);
-				tar_add_files($files,$dir_name.'/',$files_list);
-				generateTAR($files_list,$tar_total_size);
-				die();
-			}
-			break;
+		case 'tar':
+			require_once('tar.php');
+			$tar = new imTar($path,$dir_name);
+			$tar->generate();
 			
 		case 'copy':
 			if($_SESSION['username']!='hero') {
@@ -208,12 +215,13 @@
 			break;
 		
 		case 'search':
-			$find=$_POST['query'];
+			$query=$_GET['q'];
+			if(!$query) $query=$_POST['q'];
 			$matches=array();
 			$files=prepare_file_list($path);
 			search_add_files($browsing,$files,$files_list);
 			foreach($files_list as $name=>$address) {
-				if(($i=stripos(get_file_name($name),$find))!==false) {
+				if(($i=stripos(get_file_name($name),$query))!==false) {
 					$matches[$name]=$address;
 				}
 			}
@@ -280,7 +288,7 @@
 	$dirs=array();
 	$files=array();
 	
-	if($mode=='search' && $find) {
+	if($do=='search' && $query) {
 	    $i=0;
 	   	echo '<table width="100%" style="table-layout:fixed"><tr>';
 	    foreach($matches as $name=>$address) {
@@ -382,9 +390,9 @@
     	$rtn ='<table cellpadding="0" cellspacing="0" dir="ltr"><tr><td>';
     	
     	if($thumb)
-    		$rtn.='<a href="?path='.$image.'" style="text-decoration: none"><img src="?path='.$image.'&mode=thumb" border="1" style="border-color:7f7f7f"></a>';
+    		$rtn.='<a href="?path='.$image.'" style="text-decoration: none"><img src="?path='.$image.'&do=thumb" border="1" style="border-color:7f7f7f"></a>';
     	else
-    		$rtn.='<img src="?path='.$image.'&mode=image" border="1" style="border-color:7f7f7f">';
+    		$rtn.='<img src="?path='.$image.'&do=image" border="1" style="border-color:7f7f7f">';
     	
     	$rtn.='</td><td background="'.DIR_THEME.'images/middle-right.jpg" valign="top"><img src="'.DIR_THEME.'images/top-right.jpg"/></td><td>';
     	if(SHOW_NAMES_BESIDE)
@@ -410,72 +418,46 @@
     	$rtn.='<a href="?path='.$path.'" style="text-decoration: none"><font face="Tahoma" style="font-size=8pt" color="black">'.get_file_name($path).'</font></a>';
     	return $rtn;
 	}
-	
-	function is_image($path) {
-		$file_extension=get_file_extension($path);
-		return in_array($file_extension,$GLOBALS['image_extensions']);
-	}
-	
-	function get_file_extension($path) {
-	    $dot_position=strrpos($path,'.')+1;
-		$file_extension=strtolower(substr($path,$dot_position,strlen($path)-$dot_position));
-		return $file_extension;		
-	}
-	
-	function get_file_name($path) {
-		for($i=0;$i<strlen($path);$i++) {
-			if(substr($path,-1,1)=='/') {
-				$path=substr($path,0,-1);
-			} else {
-				break;
-			}
-		}
-		$slash_position=strrpos($path,'/')+1;
-		$file_name=substr($path,$slash_position);
-		return $file_name;
-	}
-	
-	function get_file_path($path) {
-	    $slash_position=strrpos($path,'/');
-		$file_path=substr($path,0,$slash_position+1);
-		return $file_path;
-	}
-	
+		
 	function generate_header() {
 		global $browsing;
 		global $previous_file;
 		global $next_file;
 		global $current_image,$total_images;
 		global $path;
-		global $mode;
+		global $do;
 		echo '<html><head><title>'.IMGAL_VERSION.'</title><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/></head><body dir="'.label('OPTN_DIR').'">';
 		echo '<table width="100%" cellpadding="0" cellspacing="0" style="table-layout:fixed;border-width:1px;border-style:solid;border-color=ffc000;"><tr bgcolor="fedd56"><td width="15%">';
 		echo '<font face="Tahoma">';
 		echo '<center><font size="5" color="darkred"><b>'.IMGAL_VERSION.'</b></font><br/><font size="1">I\'m Image Gallery!</font></center>';
 		echo '</font>';
 		echo '</td><td width="15%">';
-		echo '<font face="Tahoma" style="font-size=8pt"><b>'.label('TEXT_CURRENTLY_BROWSING').':</b><br/>'.$browsing.'</font></td><td width="15%">';
+		if($do=='search') {
+			echo '<font face="Tahoma" style="font-size=8pt">'.label('TEXT_SEARCHING_FOR',array('query'=>$GLOBALS['query'],'path'=>$browsing)).'</font></td><td width="15%">';
+		} else {
+			echo '<font face="Tahoma" style="font-size=8pt">'.label('TEXT_CURRENTLY_BROWSING',array('path'=>$browsing)).'</font></td><td width="15%">';
+		}
 		if($GLOBALS['message']) {
 			echo '<font face="Tahoma" style="font-size=8pt"><b>'.label('TEXT_MESSAGE').':</b><br/>'.$GLOBALS['message'].'</font>';
 		}
 		echo '</td><td width="20%">';
 		if(SEARCH_ENABLE) {
-			echo '<form action="?path='.$browsing.'&mode=search" method="POST" style="margin-bottom:0;"><center><font face="Tahoma"  style="font-size=8pt">';
-			echo '<input type="text" size="20" name="query" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><input type="submit" value="'.label('BUTN_FIND').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
+			echo '<form action="?path='.$browsing.'&do=search" method="POST" style="margin-bottom:0;"><center><font face="Tahoma"  style="font-size=8pt">';
+			echo '<input type="text" size="20" name="q" value="'.$GLOBALS['query'].'" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><input type="submit" value="'.label('BUTN_FIND').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
 		}
 		echo '</td><td width="20%">';
 		if(isset($total_images)) {
 			echo '<font face="Tahoma" style="font-size=8pt">'.label('TEXT_IMAGE',array('no'=>($current_image+1),'total'=>$total_images)).'</font>';
 		} elseif (is_text($path) || is_html($path) || is_code($path)) {
-			echo '<a href="?path='.$browsing.'&mode=download"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_THIS_FILE').'</font></a>';
+			echo '<a href="?path='.$browsing.'&do=download"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_THIS_FILE').'</font></a>';
 		} 
 		if (is_dir($path) && DOWNLOAD_ZIP_DIR) {
-			echo '<a href="?path='.$browsing.'&mode=download-zip"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_DIR_ZIP').'</font></a>';
+			echo '<a href="?path='.$browsing.'&do=zip"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_DIR_ZIP').'</font></a>';
 		}
 		if(is_dir($path) && DOWNLOAD_ZIP_DIR && DOWNLOAD_TAR_DIR) echo '<br/>';
 		if (is_dir($path) && DOWNLOAD_TAR_DIR) {
-			echo '<a href="?path='.$browsing.'&mode=download-tar"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_DIR_TAR').'</font></a>';
+			echo '<a href="?path='.$browsing.'&do=tar"><font face="Tahoma" style="font-size=8pt">'.label('TEXT_DOWNLOAD_DIR_TAR').'</font></a>';
 		}
 		
 		$palign='right';
@@ -505,13 +487,13 @@
 			echo '</form>';
 		}
 		
-		if($browsing!='/' || ($mode=='search')) {
+		if($browsing!='/' || ($do=='search')) {
 			if($i=strrpos(substr($browsing,0,-1),'/')) {
 				$browsing_up=substr($browsing,0,$i).'/';
 			} else {
 				$browsing_up='/';
 			}
-			if($mode=='search') $browsing_up=$browsing;
+			if($do=='search') $browsing_up=$browsing;
 			if($previous_file) {
 				echo '<a href="?path='.$browsing_up.$previous_file.'"><img src="'.DIR_THEME.'images/previous.png" border="0"/></a>';
 			} elseif(is_image($path)) {
@@ -535,25 +517,25 @@
 
 		if($_SESSION['username']=='hero') {
 			echo '<td>';
-			echo '<form action="?path='.$browsing.'&mode=mkdir" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
+			echo '<form action="?path='.$browsing.'&do=mkdir" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
 			echo '<input type="text" size="20" name="dir-name" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><br/><input type="submit" value="'.label('BUTN_MKDIR').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
-			echo '</td><td colspan="2"><form enctype="multipart/form-data" action="?path='.$browsing.'&mode=upload" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
+			echo '</td><td colspan="2"><form enctype="multipart/form-data" action="?path='.$browsing.'&do=upload" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
 			echo '<input type="file" name="file-path" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><br/><input type="submit" value="'.label('BUTN_UPLOAD').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
-			echo '</td><td><form action="?path='.$browsing.'&mode=copy" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
+			echo '</td><td><form action="?path='.$browsing.'&do=copy" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
 			echo '<input type="text" size="20" name="copy-url" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><br/><input type="submit" value="'.label('BUTN_COPY').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
-			echo '</td><td><form action="?path='.$browsing.'&mode=link" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
+			echo '</td><td><form action="?path='.$browsing.'&do=link" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" size="1">';
 			echo '<input type="text" size="20" name="address" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><br/><input type="submit" value="'.label('BUTN_LINK').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
 			echo '</td><td><p align="center"><font face="Tahoma" size="1">';
-			echo '<a href="?path='.$browsing.'&mode=logout" style="text-decoration: none"><img src="images/logout.png" border="0"/><br/>'.label('TEXT_LOGOUT').'</a>';
+			echo '<a href="?path='.$browsing.'&do=logout" style="text-decoration: none"><img src="'.DIR_THEME.'images/logout.png" border="0"/><br/>'.label('TEXT_LOGOUT').'</a>';
 			echo '</font></p>';
 			echo '</td>';
 		} else {
 			echo '<td colspan="5">';
-			echo '<form action="?path='.$browsing.'&mode=login" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" style="font-name:Tahoma;font-size=8pt;">';
+			echo '<form action="?path='.$browsing.'&do=login" method="POST" style="margin-bottom:0;"><center><font face="Tahoma" style="font-name:Tahoma;font-size=8pt;">';
 			echo label('TEXT_USERNAME').': <b>HERO</b> / '.label('TEXT_PASSWORD').': <input type="password" size="20" name="password" style="font-name:Tahoma;font-size=8pt;border-style:solid;border-width:1px;border-color=d6ba49;"/><input type="submit" value="'.label('BUTN_LOGIN').'" style="font-name:Tahoma;font-size=8pt;font-weight=bold;color:fedd56;border-style:solid;border-width:2px;border-color=fedd56;background=233623;"/>';
 			echo '</font></center></form>';
 			echo '</td>';
@@ -562,329 +544,4 @@
 		echo '</tr></table></td></tr></table>';
 		echo '</body></html>';
 	}
-	
-	function is_text($path) {
-		$file_extension=get_file_extension($path);
-		return in_array($file_extension,$GLOBALS['text_extensions']);
-	}
-	
-	function is_html($path) {
-		$file_extension=get_file_extension($path);
-		return in_array($file_extension,$GLOBALS['html_extensions']);
-	}
-	
-	function is_code($path) {
-		$file_extension=get_file_extension($path);
-		return in_array($file_extension,$GLOBALS['code_extensions']);
-	}
-		
-	function make_physical_path($path) {
-		$j=array();
-		if(!is_file($path) && !is_dir($path)) {
-			for($i=0;$i<=strlen($path);$i++) {
-				if(substr($path,$i,1)=='/' || $i==strlen($path))
-					$j[]=substr($path,0,$i);
-			}
-			foreach($j as $i) {
-				if(is_file($i.'.imgal')) {
-					$path=file_get_contents($i.'.imgal').substr($path,strlen($i));
-					return make_physical_path($path);
-					break;
-				}
-			}
-		} else {
-			return $path;
-		}
-	}
-	
-	function prepare_file_list($path,&$tar_total_size=0) {
-		$files=array();
-		if ($handle = @opendir($path)) {
-    		while (false !== ($file = @readdir($handle))) {
-    			if(@is_file($path.'/'.$file)) {
-    				if(substr($file,-5,5)=='imgal') {
-    					$vir_name=substr($file,0,-6);
-    					$new_file=make_physical_path($path.'/'.$vir_name);
-    					if(is_file($new_file)) {
-    						if(substr($new_file,-10,10)!='.imgaltemp') {
-    							$files[$vir_name]=$new_file;
-    							$tar_total_size+=	@filesize($new_file)+
-    												1024-(@filesize($new_file)%512);
-    						}
-    					} else {
-    						$files[$vir_name]=prepare_file_list($new_file,$tar_total_size);
-    					}
-    				} else {
-    					if(substr($file,-10,10)!='.imgaltemp') {
-    						$files[$file]=$path.'/'.$file;
-    						$tar_total_size+=	@filesize($path.'/'.$file)+
-    											1024-(@filesize($path.'/'.$file)%512);
-    					}
-    				}
-    			} elseif(@is_dir($path.'/'.$file) && $file!='.' && $file!='..') {
-    				$files[$file]=prepare_file_list($path.'/'.$file.'/',$tar_total_size);
-    			}
-    		}
-    	}
-    	return $files;
-	}
-	
-	function search_add_files($browsing,$files,&$files_list) {
-		foreach($files as $name=>$address) {
-			if(is_array($address)) {
-				search_add_files($browsing.'/'.$name,$address,$files_list);
-			} else {
-				$files_list[$browsing.'/'.$name]=$address;
-			}
-		}
-	}
-	
-	function zip_add_files(&$create_zip,$files,$root_path='/') {
-		foreach($files as $name=>$address) {
-			if(is_array($address)) {
-				$create_zip->addDirectory($root_path.$name.'/');
-				zip_add_files($create_zip,$address,$root_path.$name.'/');
-			} else {
-				$create_zip->addFile(file_get_contents($address),$root_path.$name);
-			}
-		}
-	}
-	
-	function tar_add_files($files,$root_path='/',&$files_list) {
-		foreach($files as $name=>$address) {
-			if(is_array($address)) {
-				tar_add_files($address,$root_path.$name.'/',$files_list);
-			} else {
-				$files_list[$root_path.$name]=$address;
-			}
-		}
-	}	
-	/**
-	 * Class to dynamically create a zip file (archive)
-	 * @author Rochak Chauhan, modified by: Masoud Gheysari M <me@gheysari.com>
-	 */
-	class createZip  {  
-	
-		public $compressedData = array(); 
-		public $centralDirectory = array(); // central directory   
-		public $endOfCentralDirectory = "\x50\x4b\x05\x06\x00\x00\x00\x00"; //end of Central directory record
-		public $oldOffset = 0;
-		public $temp_file_name;
-		private $file;
-		private $data_length;
-		
-		function createZip($temp_path) {
-			$this->temp_file_name=$temp_path.rand(100000,999999).'.imgaltemp';
-			$this->file=fopen($this->temp_file_name,'w');
-		}
-	
-		public function addDirectory($directoryName) {
-			$directoryName = str_replace("\\", "/", $directoryName);  
-	
-			$feedArrayRow = "\x50\x4b\x03\x04";
-			$feedArrayRow .= "\x0a\x00";    
-			$feedArrayRow .= "\x00\x00";    
-			$feedArrayRow .= "\x00\x00";    
-			$feedArrayRow .= "\x00\x00\x00\x00"; 
-	
-			$feedArrayRow .= pack("V",0); 
-			$feedArrayRow .= pack("V",0); 
-			$feedArrayRow .= pack("V",0); 
-			$feedArrayRow .= pack("v", strlen($directoryName) ); 
-			$feedArrayRow .= pack("v", 0 ); 
-			$feedArrayRow .= $directoryName;  
-	
-			$feedArrayRow .= pack("V",0); 
-			$feedArrayRow .= pack("V",0); 
-			$feedArrayRow .= pack("V",0); 
-	
-			fwrite($this->file,$feedArrayRow);
-			$this->data_length+=strlen($feedArrayRow);
-			
-			$newOffset = $this->data_length;
-	
-			$addCentralRecord = "\x50\x4b\x01\x02";
-			$addCentralRecord .="\x00\x00";    
-			$addCentralRecord .="\x0a\x00";    
-			$addCentralRecord .="\x00\x00";    
-			$addCentralRecord .="\x00\x00";    
-			$addCentralRecord .="\x00\x00\x00\x00"; 
-			$addCentralRecord .= pack("V",0); 
-			$addCentralRecord .= pack("V",0); 
-			$addCentralRecord .= pack("V",0); 
-			$addCentralRecord .= pack("v", strlen($directoryName) ); 
-			$addCentralRecord .= pack("v", 0 ); 
-			$addCentralRecord .= pack("v", 0 ); 
-			$addCentralRecord .= pack("v", 0 ); 
-			$addCentralRecord .= pack("v", 0 ); 
-			$ext = "\x00\x00\x10\x00";
-			$ext = "\xff\xff\xff\xff";  
-			$addCentralRecord .= pack("V", 16 ); 
-	
-			$addCentralRecord .= pack("V", $this -> oldOffset ); 
-			$this -> oldOffset = $newOffset;
-	
-			$addCentralRecord .= $directoryName;  
-	
-			$this -> centralDirectory[] = $addCentralRecord;  
-		}	 
-		
-		public function addFile($data, $directoryName)   {
-			$directoryName = str_replace("\\", "/", $directoryName);  
-		
-			$feedArrayRow = "\x50\x4b\x03\x04";
-			$feedArrayRow .= "\x14\x00";    
-			$feedArrayRow .= "\x00\x00";    
-			$feedArrayRow .= "\x08\x00";    
-			$feedArrayRow .= "\x00\x00\x00\x00"; 
-			
-			$uncompressedLength = strlen($data);  
-			$compression = crc32($data);
-			$gzCompressedData = gzcompress($data);  
-			$gzCompressedData = substr( substr($gzCompressedData, 0, strlen($gzCompressedData) - 4), 2); 
-			$compressedLength = strlen($gzCompressedData);  
-			$feedArrayRow .= pack("V",$compression); 
-			$feedArrayRow .= pack("V",$compressedLength); 
-			$feedArrayRow .= pack("V",$uncompressedLength); 
-			$feedArrayRow .= pack("v", strlen($directoryName) ); 
-			$feedArrayRow .= pack("v", 0 ); 
-			$feedArrayRow .= $directoryName;  
-	
-			$feedArrayRow .= $gzCompressedData;  
-	
-			$feedArrayRow .= pack("V",$compression); 
-			$feedArrayRow .= pack("V",$compressedLength); 
-			$feedArrayRow .= pack("V",$uncompressedLength); 
-	
-			fwrite($this->file,$feedArrayRow);
-			$this->data_length+=strlen($feedArrayRow);
-	
-			$newOffset = $this->data_length;
-	
-			$addCentralRecord = "\x50\x4b\x01\x02";
-			$addCentralRecord .="\x00\x00";    
-			$addCentralRecord .="\x14\x00";    
-			$addCentralRecord .="\x00\x00";    
-			$addCentralRecord .="\x08\x00";    
-			$addCentralRecord .="\x00\x00\x00\x00"; 
-			$addCentralRecord .= pack("V",$compression); 
-			$addCentralRecord .= pack("V",$compressedLength); 
-			$addCentralRecord .= pack("V",$uncompressedLength); 
-			$addCentralRecord .= pack("v", strlen($directoryName) ); 
-			$addCentralRecord .= pack("v", 0 );
-			$addCentralRecord .= pack("v", 0 );
-			$addCentralRecord .= pack("v", 0 );
-			$addCentralRecord .= pack("v", 0 );
-			$addCentralRecord .= pack("V", 32 ); 
-	
-			$addCentralRecord .= pack("V", $this -> oldOffset ); 
-			$this -> oldOffset = $newOffset;
-	
-			$addCentralRecord .= $directoryName;  
-	
-			$this -> centralDirectory[] = $addCentralRecord;  
-		}
-	
-		public function prepareZippedfile() {
-			$controlDirectory = implode("", $this -> centralDirectory);
-			fwrite($this->file,$controlDirectory.$this->endOfCentralDirectory.
-				pack("v", sizeof($this -> centralDirectory)).     
-				pack("v", sizeof($this -> centralDirectory)).     
-				pack("V", strlen($controlDirectory)).             
-				pack("V", $this->data_length)."\x00\x00"); 
-				
-			fclose($this->file);
-		}
-	
-		public function forceDownload($file_name) {
-			$archiveName=$this->temp_file_name;
-			
-			$headerInfo = '';
-			 
-			if(ini_get('zlib.output_compression')) {
-				ini_set('zlib.output_compression', 'Off');
-			}
-	
-			header("Pragma: public");
-			header("Expires: 0");
-			header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
-			header("Cache-Control: private",false);
-			header("Content-Type: application/zip");
-			header("Content-Disposition: attachment; filename=".$file_name.";" );
-			header("Content-Transfer-Encoding: binary");
-			header("Content-Length: ".filesize($archiveName));
-			readfile($archiveName);
-			unlink($archiveName);
-		 }
-	
-	}	
-	/**
-	 * @author		Josh Barger <joshb@npt.com>, modified by: Masoud Gheysari M <me@gheysari.com>
-	 * @copyright	Copyright (C) 2002  Josh Barger
-	 */
-	function generateTAR($files_list,$tar_total_size) {
-		header("Pragma: public");
-		header("Expires: 0");
-		header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
-		header("Cache-Control: private",false);
-		header("Content-Type: application/x-tar");
-		header("Content-Disposition: attachment; filename=".$GLOBALS['dir_name'].".tar;" );
-		header("Content-Transfer-Encoding: binary");
-		header("Content-Length: ".($tar_total_size+512));
-		
-		foreach($files_list as $name => $address) {
-			$header .= str_pad($name,100,chr(0));
-			$header .= str_pad(decoct('777'),7,"0",STR_PAD_LEFT) . chr(0);
-			$header .= str_pad(decoct('0'),7,"0",STR_PAD_LEFT) . chr(0);
-			$header .= str_pad(decoct('0'),7,"0",STR_PAD_LEFT) . chr(0);
-			$header .= str_pad(decoct(filesize($address)),11,"0",STR_PAD_LEFT) . chr(0);
-			$header .= str_pad(decoct(filectime($address)),11,"0",STR_PAD_LEFT) . chr(0);
-			$header .= str_repeat(" ",8);
-			$header .= "0";
-			$header .= str_repeat(chr(0),100);
-			$header .= str_pad("ustar",6,chr(32));
-			$header .= chr(32) . chr(0);
-			$header .= str_pad('root',32,chr(0));
-			$header .= str_pad('root',32,chr(0));
-			$header .= str_repeat(chr(0),8);
-			$header .= str_repeat(chr(0),8);
-			$header .= str_repeat(chr(0),155);
-			$header .= str_repeat(chr(0),12);
-
-			$checksum = str_pad(decoct(computeUnsignedChecksum($header)),6,"0",STR_PAD_LEFT);
-			for($i=0; $i<6; $i++) {
-				$header[(148 + $i)] = substr($checksum,$i,1);
-			}
-			$header[154] = chr(0);
-			$header[155] = chr(32);
-			
-			echo $header;
-			readfile($address);
-			echo str_repeat(chr(0),512-(filesize($address)%512));
-			unset($header);
-		}
-		echo str_repeat(chr(0),512);
-	}
-	
-	function computeUnsignedChecksum($bytestring) {
-		for($i=0; $i<512; $i++)
-			$unsigned_chksum += ord($bytestring[$i]);
-		for($i=0; $i<8; $i++)
-			$unsigned_chksum -= ord($bytestring[148 + $i]);
-		$unsigned_chksum += ord(" ") * 8;
-
-		return $unsigned_chksum;
-	}
-
-	function label($name,$tags=null) {
-		global $language;
-		$text=$language[$name];
-		if($tags) {
-			foreach($tags as $tag=>$data) {
-				$text=str_replace("%$tag%",$data,$text);
-			}
-		}
-		return $text;
-	}
-	
 ?>

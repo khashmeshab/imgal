@@ -10,7 +10,8 @@
  
 	global $language;
 
-	$language=array('TEXT_CURRENTLY_BROWSING'			=> 'در حال مشاهده',
+	$language=array('TEXT_CURRENTLY_BROWSING'			=> 'در حال مشاهده:<br/><b>%path%</b>',
+					'TEXT_SEARCHING_FOR'				=> 'جستجو برای <b>"%query%"</b> در:<br/><b>%path%</b>',
 					'TEXT_LOGOUT_SUCCESSFUL'			=> 'شما با موفقيت از imgal خارج شديد.',
 					'TEXT_LOGIN_SUCCESSFUL'				=> 'شما با کاربر <b>%user%</b> وارد imgal شديد.',
 					'TEXT_INVALID_PASSWORD'				=> 'کلمه عبور کاربر <b>%user%</b> را اشتباه وارد نموديد.',

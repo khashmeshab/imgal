@@ -10,7 +10,8 @@
  
 	global $language;
 
-	$language=array('TEXT_CURRENTLY_BROWSING'			=> 'Currently Browsing',
+	$language=array('TEXT_CURRENTLY_BROWSING'			=> 'Currently Browsing:<br/><b>%path%</b>',
+					'TEXT_SEARCHING_FOR'				=> 'Searching for <b>"%query%"</b> in:<br/><b>%path%</b>',
 					'TEXT_LOGOUT_SUCCESSFUL'			=> 'You have successfuly logged out from imgal.',
 					'TEXT_LOGIN_SUCCESSFUL'				=> 'You have successfuly logged in to imgal as <b>%user%</b> user.',
 					'TEXT_INVALID_PASSWORD'				=> 'Invalid password for <b>%user%</b>.',
